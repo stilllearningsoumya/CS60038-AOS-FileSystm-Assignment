@@ -2,8 +2,8 @@
 
 Building a simple file system with an emulated in-memory disk.
 
-Assignment Date: 29 October 2020\
-Deadline: 20 November 2020
+Assignment Date: 11 October 2021\
+Deadline: 10 November 2021
 
 ---
 
@@ -279,6 +279,6 @@ For bitmap manipulations you may follow this tutorial: [http://www.mathcs.emory.
 #### In every source code file, students need to comment their name, roll number.
 
 
-### Do not make any assumption. If you find anything ambiguous in the assignment statement, do not hesitate to post it to teams.
+### Do not make any assumption. If you find anything ambiguous in the assignment statement, do not hesitate to post it to teams or mail it to us.
 
 #### DO NOT COPY CODE FROM OTHER GROUPS. WE WILL NOT EVALUATE A SOLUTION IF FOUND COPIED. ALL INVOLVED GROUPS WILL BE AWARDED ZERO.
