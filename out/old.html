@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>CS60038: Assignment 2</title>
+        <style>
+</style>
+        
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item { list-style-type: none; } .task-list-item-checkbox { margin-left: -20px; vertical-align: middle; }
+</style>
+        
+        
+        
+    </head>
+    <body class="vscode-light">
+        <h1 id="cs60038-assignment-2">CS60038: Assignment 2</h1>
+<p>Building a simple file system with an emulated disk, and interfacing with FUSE.</p>
+<p>Assignment Date: <br>
+Deadline:</p>
+<hr>
+<p>The objective of this assignment is to get hands-on experience in building a simple file system.</p>
+<p>This assignment will involve building four parts:</p>
+<ul>
+<li><strong>PART A: Building a  disk emulator</strong></li>
+<li><strong>PART B: Implementing a simple file system - SFS</strong></li>
+<li><strong>PART C: Implementing directory structure in  SFS</strong></li>
+<li><strong>PARC D: FUSE interface for SFS</strong></li>
+</ul>
+<h2 id="part-a-disk-emulator">PART A: Disk Emulator</h2>
+<p>Since it is difficult to test our file system on a physical raw disk, we will need to emulate it. For that we are going to create a file based disk emulator using standard open, read, write, and lseek calls in Linux. This will provide APIs for block level access to the emulated disk. Along with that, the disk will mantain some stats about its usage.</p>
+<p>Our disk emulator interface will have the following functions:</p>
+<pre><code class="language-c"><div><span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">create_disk</span><span class="hljs-params">(<span class="hljs-keyword">char</span> *filename, <span class="hljs-keyword">int</span> nbytes)</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">open_disk</span><span class="hljs-params">(<span class="hljs-keyword">char</span> *filename)</span></span>;
+
+<span class="hljs-function">disk_stat* <span class="hljs-title">get_disk_stat</span><span class="hljs-params">(<span class="hljs-keyword">int</span> disk)</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">read_block</span><span class="hljs-params">(<span class="hljs-keyword">int</span> disk, <span class="hljs-keyword">int</span> blocknr, <span class="hljs-keyword">void</span> *block_data)</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">write_block</span><span class="hljs-params">(<span class="hljs-keyword">int</span> disk, <span class="hljs-keyword">int</span> blocknr, <span class="hljs-keyword">void</span> *block_data)</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">close_disk</span><span class="hljs-params">(<span class="hljs-keyword">int</span> disk)</span></span>;
+</div></code></pre>
+<p>The disk will have fixed block size of <code>4KB</code> (4096 bytes). In addition to providing the API for reading and writing blocks, it will maintain some stats about the disk.</p>
+<p>The structure for the stats is as follows:</p>
+<pre><code class="language-c"><div><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">disk</span> {</span>
+    <span class="hljs-keyword">uint32_t</span> size; <span class="hljs-comment">// size of the entire disk file</span>
+    <span class="hljs-keyword">uint32_t</span> blocks; <span class="hljs-comment">// number of blocks</span>
+    <span class="hljs-keyword">uint32_t</span> reads; <span class="hljs-comment">// number of block reads performed</span>
+    <span class="hljs-keyword">uint32_t</span> writes; <span class="hljs-comment">// number of block writes performed</span>
+} disk_stat;
+</div></code></pre>
+<p>These stats will take up <code>16 bytes</code> of storage at the beginning of the disk.</p>
+<p>Therefore, if we consider a disk of size <code>409600 bytes = (4KB x 100)</code>, the number of usable blocks will be <code>99</code>.
+Again, if we consider a disk of size <code>409616 bytes = (4KB x 100) + 16</code>, the number of usable blocks will be <code>100</code>.</p>
+<p>Implement the disk emulator functions as follows:</p>
+<h4 id="int-create_diskchar-filename-int-nbytes"><code>int create_disk(char *filename, int nbytes)</code></h4>
+<p>Creates a disk file of size <code>nbytes</code>. Initializes <code>disk_stat</code> struct with calculated number of blocks, and reads, writes as 0. Writes it to the beginning of the disk. Returns 0 if successful, -1 for error. The size of the disk file must be exactly <code>nbytes</code>.</p>
+<h4 id="int-open_diskchar-filename"><code>int open_disk(char *filename)</code></h4>
+<p>Opens the disk file of given filename. Check if valid stat is present. Return the <strong>file descriptor</strong> if successful. Return error otherwise. The returned file descriptor will be used in the following functions.</p>
+<h4 id="disk_stat-get_disk_statint-disk"><code>disk_stat* get_disk_stat(int disk)</code></h4>
+<p>Reads disk_stat from the disk. And returns its pointer (pointer to the structure disk_stat). This pointer can be used to access the disk stats.</p>
+<h4 id="int-read_blockint-disk-int-blocknr-void-block_data"><code>int read_block(int disk, int blocknr, void *block_data)</code></h4>
+<p>Assumes that <code>block_data</code> is a 4KB buffer. Checks if <code>blocknr</code> is a valid block pointer - <code>blocknr</code> ranges from <code>0</code> to <code>(B -1)</code>, where B is the total number of blocks in the disk. Reads the block contents into the buffer. Returns 0 if successful, -1 otherwise. Also updates the <code>disk_stat</code> to increment the <code>reads</code> count.</p>
+<h4 id="int-write_blockint-disk-int-blocknr-void-block_data"><code>int write_block(int disk, int blocknr, void *block_data)</code></h4>
+<p>Assumes that the <code>block_data</code> is a <code>4KB</code> buffer. Checks if <code>blocknr</code> is a valid block pointer. Writes the contents of the <code>block_data</code> buffer into the correct block. Returns 0 if success, -1 otherwise. Also, updates the <code>disk_stat</code> to increment the <code>writes</code> counter.<br>
+<strong>NOTE</strong>: Updating disk_stat does not affect the writes counter.</p>
+<h4 id="int-close_diskint-disk"><code>int close_disk(int disk)</code></h4>
+<p>Close the emulated disk file.</p>
+<h2 id="part-b-simple-file-system-sfs">PART B: Simple File System SFS</h2>
+<p>Using the emulated disk we will be implementing a simple file system: SFS. Let us first take a look a the file system layout:</p>
+<p>SFS will have the following components:</p>
+<ul>
+<li>Super Block</li>
+<li>Inodes and Inode Blocks</li>
+<li>Data Blocks</li>
+<li>Indirect Blocks</li>
+<li>Inode Bitmap</li>
+<li>Data block bitmap</li>
+</ul>
+<h4 id="super-block">Super Block</h4>
+<p>The first block of SFS will be the super block.
+The super block will have the following info:</p>
+<pre><code class="language-c"><div><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">super_block</span> {</span>
+	<span class="hljs-keyword">uint32_t</span> magic_number;	<span class="hljs-comment">// File system magic number</span>
+	<span class="hljs-keyword">uint32_t</span> blocks;	<span class="hljs-comment">// Number of blocks in file system (except super block)</span>
+
+	<span class="hljs-keyword">uint32_t</span> inode_blocks;	<span class="hljs-comment">// Number of blocks reserved for inodes == 10% of Blocks</span>
+	<span class="hljs-keyword">uint32_t</span> inodes;	<span class="hljs-comment">// Number of inodes in file system == length of inode bit map</span>
+	<span class="hljs-keyword">uint32_t</span> inode_bitmap_block_idx;  <span class="hljs-comment">// Block Number of the first inode bit map block</span>
+	<span class="hljs-keyword">uint32_t</span> inode_block_idx;	<span class="hljs-comment">// Block Number of the first inode block</span>
+
+	<span class="hljs-keyword">uint32_t</span> data_block_bitmap_idx;	<span class="hljs-comment">// Block number of the first data bitmap block</span>
+	<span class="hljs-keyword">uint32_t</span> data_block_idx;	<span class="hljs-comment">// Block number of the first data block</span>
+	<span class="hljs-keyword">uint32_t</span> data_blocks;  <span class="hljs-comment">// Number of blocks reserved as data blocks</span>
+} super_block;
+</div></code></pre>
+<h4 id="inodes-and-inode-blocks">Inodes and Inode Blocks</h4>
+<pre><code class="language-c"><div><span class="hljs-keyword">typedef</span> <span class="hljs-class"><span class="hljs-keyword">struct</span> <span class="hljs-title">inode</span> {</span>
+	<span class="hljs-keyword">uint32_t</span> valid; <span class="hljs-comment">// 0 if invalid</span>
+	<span class="hljs-keyword">uint32_t</span> size; <span class="hljs-comment">// logical size of the file</span>
+	<span class="hljs-keyword">uint32_t</span> direct[<span class="hljs-number">5</span>]; <span class="hljs-comment">// direct data block pointer</span>
+	<span class="hljs-keyword">uint32_t</span> indirect; <span class="hljs-comment">// indirect pointer</span>
+} inode;
+</div></code></pre>
+<p>As we can see the size of each inode is <code>32 bytes</code>. Therefore each inode block will contain <code>128</code> inodes.</p>
+<p>The number of blocks assigned for inodes will be <code>10%</code> of the total number of available blocks in the disk (except super block).</p>
+<p>According to the total number of inodes, the length of the inode bit map is set.</p>
+<p>Rest of the blocks are used for data blocks and bit map for data block.</p>
+<h4 id="data-blocks">Data Blocks</h4>
+<p>Data blocks are the blocks used for storing actual file contents. We can also use these blocks as indirect blocks for storing indirect block pointers. Later we will be using these data blocks for storing directory structures also.</p>
+<h4 id="indirect-blocks">Indirect Blocks</h4>
+<p>These are data blocks storing pointers to other data blocks. In case direct pointers are not enough to accomodate all the block pointers, the indirect blocks will be used to store more pointers. Each pointer is an integer of <code>4 bytes</code>, so one indirect block will hold <code>1024</code> such pointers. Only one indirect block is allowed per inode.</p>
+<h4 id="inode-bitmap">Inode Bitmap</h4>
+<p>The inode bitmap is used to determine which inodes are occupied and which are free. Accordingly while creating an inode, the first free inode index is determined from this bitmap.</p>
+<h4 id="data-block-bitmap">Data block bitmap</h4>
+<p>Similar to inode bitmap, the data block bitmap is used to find out which blocks are free or used.</p>
+<p>The following functions needs to be implemented for SFS:</p>
+<pre><code class="language-c"><div><span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">format</span><span class="hljs-params">(<span class="hljs-keyword">int</span> disk)</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">mount</span><span class="hljs-params">(<span class="hljs-keyword">int</span> disk)</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">create_file</span><span class="hljs-params">()</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">remove_file</span><span class="hljs-params">(<span class="hljs-keyword">int</span> inumber)</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">stat</span><span class="hljs-params">(<span class="hljs-keyword">int</span> inumber)</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">read_i</span><span class="hljs-params">(<span class="hljs-keyword">int</span> inumber, <span class="hljs-keyword">char</span> *data, <span class="hljs-keyword">int</span> length, <span class="hljs-keyword">int</span> offset)</span></span>;
+
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">write_i</span><span class="hljs-params">(<span class="hljs-keyword">int</span> inumber, <span class="hljs-keyword">char</span> *data, <span class="hljs-keyword">int</span> length, <span class="hljs-keyword">int</span> offset)</span></span>;
+</div></code></pre>
+<h4 id="int-formatint-disk"><code>int format(int disk)</code></h4>
+<p>This function takes input the file descriptor of the emulated disk. In order to write the super block first we need to calculate all the values of blocks, indexes etc.. So the organization of the file system needs to be decided first. This is done as follows:</p>
+<p>If the disk has <code>N</code> blocks (usable blocks as specified in <code>disk_stat</code>), one block is reserved for the super block. Therefore we have <code>M = N - 1</code> blocks remaining.
+Among these M blocks, 10 percent is reserved for inode blocks. Therefore the number of inode blocks is <code>I = 0.1 * M</code> (take floor). Therefore the total number of inodes will be <code>I * 128</code>, which is also the length of the inode bitmap (in bits). Therefore the number of blocks reserved for the inode bitmap will be <code>IB = (I * 128) / (8 * 4096)</code> (take ceil).</p>
+<p>Therefore the remaining number of blocks is <code>R = M - I - IB</code>. These will be used as data blocks and data block bitmap blocks. For simplicity, consider that the length of the data block bitmap is <code>R bits</code>. Therefore the number of blocks required for data block bitmap is <code>DBB = R / (8 * 4096)</code> (take ceil). Therefore, the remaining are data blocks: <code>DB = R - DBB</code>. NOTE: we only consider the first <code>DB</code> number of bits of the data block bitmap.</p>
+<p>The values of the super block structure will be set as follows:</p>
+<pre><code><code><div>magic_number = 12345
+blocks = M
+inode_blocks = I
+inodes = I * 128
+inode_bitmap_block_idx = 1
+inode_block_idx = 1 + IB + DBB
+data_block_bitmap_idx = 1 + IB
+data_block_idx = 1 + IB + DBB + I
+data_blocks = DB
+</div></code></code></pre>
+<p>The super block is then written to the disk.</p>
+<p>The bitmaps are initialized. The inodes are also initialized with <code>valid = 0</code>. All these are written to the disk.</p>
+<p>Returns 0 if successful, -1 otherwise.</p>
+<h4 id="int-mountint-disk"><code>int mount(int disk)</code></h4>
+<p>This method first attempts to read the super block and then verify the <code>magic_number</code>. If this is successful, a valid SFS is detected. In that case load the bitmaps as well as the mounted file descriptor into the memory (this file descriptor is used in the next function calls). Return 0 if successful, -1 otherwise. The except <code>format</code>, and <code>mount</code>, other functions should return error when operating on unmounted filesystem.</p>
+<h4 id="int-create_file"><code>int create_file()</code></h4>
+<p>Creates a new inode and returns the inode pointer - that is the index of the inode (starting from 0). Initialize the size to 0 and valid to 1. Accordingly update the inode bitmap (not only in memory but also on the disk). Return -1 if error or if no inodes are left.</p>
+<h4 id="int-remove_fileint-inumber"><code>int remove_file(int inumber)</code></h4>
+<p>Removes an inode along with all corresponding data blocks and indirect pointer blocks. Just set valid to 0 in the iode, and update the bitmaps (both inode and data block bitmaps).(No need to override data blocks or indirect pointer blocks).</p>
+<h4 id="int-statint-inumber"><code>int stat(int inumber)</code></h4>
+<p>Returns the stats of the input inode: logical size, and number of data blocks in use, number of direct and indirect pointers in use.</p>
+<h4 id="int-read_iint-inumber-char-data-int-length-int-offset"><code>int read_i(int inumber, char *data, int length, int offset)</code></h4>
+<p>First checks if <code>inumber</code>, <code>offset</code> and <code>length</code> are valid or not. In case the <code>inumber</code> is invalid or <code>offset</code> in out of range return error (<code>-1</code>). If length is out of range, read only till the end of the file and return the length of the data read (in bytes). The data is read into the buffer <code>data</code>, which is assumed to be of length <code>length</code>. In case of any error return <code>-1</code>.</p>
+<h4 id="int-write_iint-inumber-char-data-int-length-int-offset"><code>int write_i(int inumber, char *data, int length, int offset)</code></h4>
+<p>First checks if <code>inumber</code>and <code>offset</code> are valid. Then write data to a valid inode by copying <code>length</code> bytes from the buffer <code>data</code> into the data blocks of the inode starting at offset bytes. Allocate any necessary direct and indirect blocks in the process. Also update the bitmaps accordingly. Returns the number of bytes actually written. In case of any error return <code>-1</code>. If the disk is full (no free data blocks left, write as much data as possible and return the number of bytes written).</p>
+<h2 id="part-c-file-and-directory-structure-in-sfs">PART C: File and directory structure in SFS</h2>
+<p>Now since we have the basic functions to create, remove, read and write files, we need build a directory structure to organize files. Use the functions above to create your own directory structure. Remember every directory is also a file, and the file contains a list of its children. The list should contain:</p>
+<ul>
+<li>valid bit (unset when a file or directory is deleted and can be replace by some other entry later)</li>
+<li>type bit: file / directory</li>
+<li>the name of the file or directory (fix the allowed maximum length)</li>
+<li>length of the name</li>
+<li>inumber of the file or directory</li>
+</ul>
+<p>Assign the first inode for the root directory file.</p>
+<p>You can use the following structure for the entries in the directory files:</p>
+<p>You may modify it to include other information if required. (provide justification)</p>
+<p>Implement the following additional functins to read and write files with file path:</p>
+<pre><code class="language-c"><div><span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">read_file</span><span class="hljs-params">(<span class="hljs-keyword">char</span> *filepath, <span class="hljs-keyword">char</span> *data, <span class="hljs-keyword">int</span> length, <span class="hljs-keyword">int</span> offset)</span></span>;
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">write_file</span><span class="hljs-params">(<span class="hljs-keyword">char</span> *filepath, <span class="hljs-keyword">char</span> *data, <span class="hljs-keyword">int</span> length, <span class="hljs-keyword">int</span> offset)</span></span>;
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">create_dir</span><span class="hljs-params">(<span class="hljs-keyword">char</span> *dirpath)</span></span>;
+<span class="hljs-function"><span class="hljs-keyword">int</span> <span class="hljs-title">remove_dir</span><span class="hljs-params">(<span class="hljs-keyword">char</span> *dirpath)</span></span>;
+</div></code></pre>
+<h2 id="part-d-interfacing-with-fuse">PART D: Interfacing with FUSE</h2>
+<p>FUSE (Filesystem in Userspace) is an interface for userspace programs to export a filesystem to the Linux kernel. FUSE is particularly useful for writing virtual file systems. Unlike traditional file systems that essentially save data to and retrieve data from disk, virtual filesystems do not actually store data themselves. They act as a view or translation of an existing file system or storage device.</p>
+<p>libfuse: <a href="https://github.com/libfuse/libfuse">https://github.com/libfuse/libfuse</a></p>
+<p>Documentation: <a href="http://libfuse.github.io/doxygen/">http://libfuse.github.io/doxygen/</a></p>
+<p>Tutorials:</p>
+<ul>
+<li>
+<p><a href="http://www.maastaar.net/fuse/linux/filesystem/c/2016/05/21/writing-a-simple-filesystem-using-fuse/">http://www.maastaar.net/fuse/linux/filesystem/c/2016/05/21/writing-a-simple-filesystem-using-fuse/</a></p>
+</li>
+<li>
+<p><a href="http://gauss.ececs.uc.edu/Courses/c4029/labs/Fuse/index.html">http://gauss.ececs.uc.edu/Courses/c4029/labs/Fuse/index.html</a></p>
+</li>
+</ul>
+<hr>
+<p><strong>NOTE: In all the functions, take special care to free any allocated memory that is not required once the function returns.</strong></p>
+<p>For bitmap manipulations you may follow this tutorial: <a href="http://www.mathcs.emory.edu/~cheung/Courses/255/Syllabus/1-C-intro/bit-array.html">http://www.mathcs.emory.edu/~cheung/Courses/255/Syllabus/1-C-intro/bit-array.html</a></p>
+<hr>
+<h2 id="important-information">Important Information</h2>
+<h4 id="the-students-have-to-submit-the-source-code-compatible-with-the-header-files-provided-a-makefile-is-also-included-for-compiling-the-code-implement-the-disk-emulator-code-and-sfs-code-in-discc-and-sfsc-respectively-for-fuse-you-may-create-your-own-files-and-change-the-makefile-accordingly-use-mainc-to-test-the-codes">The students have to submit the source code compatible with the header files provided. A Makefile is also included for compiling the code. Implement the disk emulator code and SFS code in disc.c and sfs.c respectively. For FUSE you may create your own files and change the Makefile accordingly. Use main.c to test the codes.</h4>
+<h4 id="in-every-source-code-file-students-need-to-comment-their-name-roll-number">In every source code file, students need to comment their name, roll number.</h4>
+<h3 id="do-not-make-any-assumption-if-you-find-anything-ambiguous-in-the-assignment-statement-do-not-hesitate-to-post-it-to-the-piazza">Do not make any assumption. If you find anything ambiguous in the assignment statement, do not hesitate to post it to the piazza.</h3>
+<h4 id="do-not-copy-code-from-other-groups-we-will-not-evaluate-a-solution-if-found-copied-all-involved-groups-will-be-awarded-zero">DO NOT COPY CODE FROM OTHER GROUPS. WE WILL NOT EVALUATE A SOLUTION IF FOUND COPIED. ALL INVOLVED GROUPS WILL BE AWARDED ZERO.</h4>
+
+    </body>
+    </html>
