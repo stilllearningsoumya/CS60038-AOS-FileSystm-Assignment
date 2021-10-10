@@ -235,7 +235,7 @@ First checks if `inumber`and `offset` are valid. Then write data to a valid inod
 
 #### `int fit_to_size(int inumber, int size)`
 
-Truncates the size of an inode along with its corresponding data blocks and indirect pointer blocks to the specifed size limit. Simply put, if a file is larger than the specified size, the extra data is lost. Else, if a file is shorter leave it as it is.
+Truncates the size of an inode along with its corresponding data blocks and indirect pointer blocks to the specifed size limit. Simply put, if a file is larger than the specified size, the extra data is lost from the ending of that file. Else, if a file is shorter leave it as it is.
 
 
 ## PART C: File and directory structure in SFS
