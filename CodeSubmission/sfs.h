@@ -40,6 +40,8 @@ int read_i(int inumber, char *data, int length, int offset);
 
 int write_i(int inumber, char *data, int length, int offset);
 
+int fit_to_size(int inumber, int size);
+
 
 int read_file(char *filepath, char *data, int length, int offset);
 int write_file(char *filepath, char *data, int length, int offset);

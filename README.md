@@ -281,4 +281,4 @@ For bitmap manipulations you may follow this tutorial: [http://www.mathcs.emory.
 
 ### Do not make any assumption. If you find anything ambiguous in the assignment statement, do not hesitate to post it to teams or mail it to us.
 
-#### DO NOT COPY CODE FROM OTHER GROUPS. WE WILL NOT EVALUATE A SOLUTION IF FOUND COPIED. ALL INVOLVED GROUPS WILL BE AWARDED ZERO.
+#### DO NOT COPY CODE FROM OTHER STUDENTS. WE WILL NOT EVALUATE A SOLUTION IF FOUND COPIED. ALL INVOLVED STUDENTS WILL BE AWARDED ZERO.
