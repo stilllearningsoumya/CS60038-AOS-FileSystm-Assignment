@@ -176,6 +176,8 @@ int stat(int inumber);
 int read_i(int inumber, char *data, int length, int offset);
 
 int write_i(int inumber, char *data, int length, int offset);
+
+int fit_to_size(int inumber, int size);
 ```
 
 #### `int format(disk *diskptr)`
