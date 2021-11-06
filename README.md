@@ -25,7 +25,7 @@ Our disk emulator interface will have the following functions:
 
 ```c
 
-int create_disk(disk *diskptr, int nbytes);
+disk * create_disk(int nbytes);
 
 int read_block(disk *diskptr, int blocknr, void *block_data);
 
